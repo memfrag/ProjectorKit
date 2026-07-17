@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Projector",
+    name: "ProjectorKit",
     platforms: [.macOS(.v13)],
     products: [
         .library(name: "ProjectorKit", targets: ["ProjectorKit"]),
