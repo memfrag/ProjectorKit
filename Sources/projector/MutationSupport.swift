@@ -12,6 +12,9 @@ struct MutationOptions: ParsableArguments {
 
     @Flag(name: .long, help: "Do not write a .projector-backup sibling before saving.")
     var noBackup = false
+
+    @Flag(name: .long, help: "After writing, run 'xcodebuild -list' and fail if it doesn't succeed. Slow; off by default.")
+    var verifyXcodebuild = false
 }
 
 /// The JSON/human result of a mutating command, wrapping the operation result
@@ -67,7 +70,8 @@ enum MutationRunner {
             return
         }
 
-        let outcome = try project.save(options: SaveOptions(backup: !mutation.noBackup))
+        let outcome = try project.save(options: SaveOptions(
+            backup: !mutation.noBackup, verifyXcodebuild: mutation.verifyXcodebuild))
         let report = MutationReport(
             action: action,
             result: outcome.wroteFile ? "applied" : "no-change",

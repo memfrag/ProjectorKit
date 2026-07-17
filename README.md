@@ -22,7 +22,7 @@ Early development. Milestones:
 - [x] M4 — targets, dependencies, Swift packages
 - [x] M5 — build settings & xcconfig
 - [x] M6 — schemes, Info.plist, entitlements
-- [ ] M7 — batch `apply`, xcodebuild verification, agent docs
+- [x] M7 — batch `apply`, xcodebuild verification, agent docs
 
 ## Usage
 
@@ -68,13 +68,61 @@ and has no meaningful dry run.
 
 `--project` may be omitted when exactly one `.xcodeproj` exists in the current
 directory. Mutating commands take `--check` (dry-run, exit 2 if changes pend),
-`--diff` (show the unified diff), and `--no-backup`.
+`--diff` (show the unified diff), `--no-backup`, and `--verify-xcodebuild`
+(after writing, run `xcodebuild -list` and fail the save if Xcode doesn't
+accept the result — off by default, since it spawns XCBBuildService and is slow).
+
+### Batch edits: `apply`
+
+Multi-step edits ("add 3 files, a package, and a setting") should go through
+`apply` rather than N separate invocations — one parse, one write, one diff,
+and no window where another process (Xcode) could touch the file mid-sequence:
+
+```sh
+cat > ops.json <<'EOF'
+[
+  {"op": "add-file", "path": "Feature.swift", "targets": ["MyApp"], "group": "Sources"},
+  {"op": "set-build-setting", "key": "SWIFT_VERSION", "value": "6.0", "target": "MyApp"},
+  {"op": "add-target", "name": "Tool", "type": "commandLineTool", "platform": "macOS"}
+]
+EOF
+projector apply ops.json --project MyApp.xcodeproj --check   # preview the combined diff
+projector apply ops.json --project MyApp.xcodeproj --verify-xcodebuild
+```
+
+Supported `op` values: `add-file`, `remove-file`, `add-group`, `add-target`,
+`remove-target`, `add-dependency`, `remove-dependency`, `add-package`,
+`remove-package`, `set-build-setting`, `unset-build-setting`, `set-xcconfig`.
+(Schemes and plist/entitlement edits use a separate direct-file-write
+mechanism and aren't batchable — run those as individual commands.) Pass `-`
+as the path to read from stdin. Run `projector apply --help` for the full
+per-op field reference.
+
+### JSON contract for agents
+
+Every command's `--json` output is one flat object:
+
+```json
+{ "ok": true, "action": "add-file", "result": "applied",
+  "changes": [{"kind": "buildFile", "detail": "...", "target": "MyApp"}],
+  "fidelity": "surgical", "diff": null, "warnings": [], "schemaVersion": 1 }
+```
+
+`result` is one of `applied` / `already-satisfied` / `would-apply` (under
+`--check`) / `no-change`. `fidelity` is `surgical` (unchanged bytes preserved,
+diff confined to the edit), `reserialize` (the splice couldn't be verified —
+still correct, but a large diff; treat as a signal something is unusual about
+the project), or `none` (no-op). On error, the envelope is
+`{"ok": false, "error": "...", "schemaVersion": 1}` instead.
+
+Exit codes: `0` success (applied or already-satisfied), `2` `--check` found
+pending changes, `3` entity not found, `4` validation failed, `5` project
+parse error, `6` write/lock/verify error, `64` usage error.
 
 ## Development
 
 ```sh
 swift build
-swift test
+swift test                           # ProjectorKitTests + CLITests, no Xcode build required
+Scripts/run-integration-tests.sh     # slow: real xcodebuild, gated out of `swift test`
 ```
-
-Integration tests (real `xcodebuild`): `PROJECTOR_INTEGRATION=1 Scripts/run-integration-tests.sh`.

@@ -6,10 +6,14 @@ public struct SaveOptions: Sendable {
     public var backup: Bool
     /// Refuse to write if the pbxproj changed on disk since load.
     public var checkConcurrentModification: Bool
+    /// After writing, run `xcodebuild -list` and fail the save if it doesn't
+    /// succeed. Opt-in: slow, and can fail for reasons unrelated to the edit.
+    public var verifyXcodebuild: Bool
 
-    public init(backup: Bool = true, checkConcurrentModification: Bool = true) {
+    public init(backup: Bool = true, checkConcurrentModification: Bool = true, verifyXcodebuild: Bool = false) {
         self.backup = backup
         self.checkConcurrentModification = checkConcurrentModification
+        self.verifyXcodebuild = verifyXcodebuild
     }
 }
 
@@ -19,6 +23,8 @@ public struct SaveOutcome: Sendable {
     public let changedReferences: [String]
     /// True when the file on disk was actually rewritten.
     public let wroteFile: Bool
+    /// Set when `SaveOptions.verifyXcodebuild` was requested and a write happened.
+    public let xcodebuildVerification: XcodebuildVerification?
 }
 
 /// The result of a dry-run: what `save` would do, without writing.
@@ -67,7 +73,7 @@ public extension ProjectorProject {
 
         // 4. Nothing to do?
         if result.fidelity == .none || diff.isEmpty {
-            return SaveOutcome(fidelity: .none, diff: diff, changedReferences: [], wroteFile: false)
+            return SaveOutcome(fidelity: .none, diff: diff, changedReferences: [], wroteFile: false, xcodebuildVerification: nil)
         }
 
         // 5. Atomic write + post-write reparse sanity check.
@@ -80,8 +86,21 @@ public extension ProjectorProject {
                 reason: "written file failed to re-parse: \(error). A backup was kept.")
         }
 
+        // 6. Optional ground-truth check: does Xcode itself accept the file?
+        var verification: XcodebuildVerification?
+        if options.verifyXcodebuild {
+            let outcome = SanityChecks.verifyWithXcodebuild(projectPath: xcodeprojPath)
+            verification = outcome
+            if !outcome.succeeded {
+                throw ProjectorError.writeFailure(
+                    path: pbxprojPath.path,
+                    reason: "xcodebuild -list failed after write (file was written; a backup was kept):\n\(outcome.output)")
+            }
+        }
+
         return SaveOutcome(
             fidelity: result.fidelity, diff: diff,
-            changedReferences: result.changedReferences, wroteFile: true)
+            changedReferences: result.changedReferences, wroteFile: true,
+            xcodebuildVerification: verification)
     }
 }

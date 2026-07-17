@@ -33,5 +33,9 @@ let package = Package(
             dependencies: ["ProjectorKit"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(
+            name: "CLITests",
+            dependencies: ["projector"]
+        ),
     ]
 )
