@@ -14,6 +14,9 @@ struct Projector: ParsableCommand {
         version: "0.1.0",
         subcommands: [
             ListCommand.self,
+            ShowCommand.self,
+            GetCommand.self,
+            ValidateCommand.self,
         ]
     )
 }
