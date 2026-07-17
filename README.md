@@ -11,6 +11,11 @@ atomically, and can be previewed with `--check`.
 Built on [tuist/XcodeProj](https://github.com/tuist/XcodeProj) (pinned exactly —
 serialization style changes are deliberate, golden-re-baselined upgrades).
 
+## License
+
+0BSD (see `LICENSE`). Third-party dependency licenses are reproduced in
+`ATTRIBUTIONS.md`.
+
 ## Status
 
 Early development. Milestones:
