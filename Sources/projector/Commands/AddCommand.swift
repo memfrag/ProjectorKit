@@ -8,7 +8,7 @@ struct AddCommand: ParsableCommand {
         abstract: "Add an entity to the project.",
         subcommands: [
             AddFile.self, AddGroup.self, AddTarget.self,
-            AddDependency.self, AddPackage.self,
+            AddDependency.self, AddPackage.self, AddScheme.self,
         ]
     )
 }
@@ -190,6 +190,58 @@ struct AddPackage: ParsableCommand {
         case "range" where parts.count == 3: return .range(from: parts[1], to: parts[2])
         default:
             throw ProjectorError.invalidOperation("Unrecognized version requirement: \(raw)")
+        }
+    }
+}
+
+struct AddScheme: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "scheme",
+        abstract: "Create a shared scheme for a target."
+    )
+
+    @OptionGroup var options: GlobalOptions
+
+    @Argument(help: "Scheme name.")
+    var name: String
+
+    @Option(name: .long, help: "The target the scheme builds/launches.")
+    var target: String
+
+    @Option(name: .long, parsing: .upToNextOption, help: "Unit/UI test target(s) to include in the Test action.")
+    var testTarget: [String] = []
+
+    @Flag(name: .long, help: "Preview the change without writing.")
+    var check = false
+
+    @Flag(name: .long, help: "Do not write a .projector-backup sibling before saving.")
+    var noBackup = false
+
+    struct Payload: Encodable {
+        let result: String
+        let diff: String?
+    }
+
+    func run() throws {
+        try runCommand(json: options.json) {
+            let project = try options.loadProject()
+            let spec = SchemeSpec(name: name, targetName: target, testTargetNames: testTarget)
+            let plan = try project.planScheme(spec)
+
+            if check {
+                let payload = Payload(result: plan.hasChanges ? "would-apply" : "no-change", diff: plan.diff.unified())
+                try emit(action: "add-scheme", json: options.json, payload: payload) {
+                    plan.hasChanges ? plan.diff.unified() : "(no pending changes)"
+                }
+                if plan.hasChanges { throw ExitCode(ProjectorExitCode.checkFoundChanges) }
+                return
+            }
+
+            try project.applyScheme(plan, backup: !noBackup)
+            let payload = Payload(result: plan.hasChanges ? "applied" : "already-satisfied", diff: nil)
+            try emit(action: "add-scheme", json: options.json, payload: payload) {
+                "add-scheme: \(payload.result)"
+            }
         }
     }
 }

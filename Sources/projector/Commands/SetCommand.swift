@@ -6,7 +6,10 @@ struct SetCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "set",
         abstract: "Set a value in the project.",
-        subcommands: [SetBuildSetting.self, SetXCConfig.self, SetXCConfigValue.self]
+        subcommands: [
+            SetBuildSetting.self, SetXCConfig.self, SetXCConfigValue.self,
+            SetPlist.self, SetEntitlement.self,
+        ]
     )
 }
 
@@ -124,6 +127,82 @@ struct SetXCConfigValue: ParsableCommand {
             try emit(action: "set-xcconfig-value", json: options.json, payload: payload) {
                 "set-xcconfig-value: \(payload.result)"
             }
+        }
+    }
+}
+
+/// `set plist`/`set entitlement` route to one of two different write
+/// mechanisms depending on the target's configuration (an INFOPLIST_KEY_*
+/// pbxproj build setting, or a direct edit of a physical plist file on disk),
+/// decided inside ProjectorKit. The physical-file path writes immediately and
+/// has no meaningful dry-run, so unlike other mutating commands these do not
+/// support --check.
+private func runPlistMutation(
+    action: String, options: GlobalOptions, apply: (ProjectorProject) throws -> OperationResult
+) throws {
+    try runCommand(json: options.json) {
+        let project = try options.loadProject()
+        let result = try apply(project)
+        // Only the INFOPLIST_KEY_* routed path touches the pbxproj graph;
+        // save() is a no-op (fidelity .none) when nothing changed there.
+        let outcome = try project.save()
+        let report = MutationReport(
+            action: action,
+            result: result.isApplied ? (outcome.wroteFile ? "applied" : "applied-on-disk") : "already-satisfied",
+            changes: result.changes, fidelity: outcome.fidelity.rawValue, diff: nil, warnings: project.warnings)
+        if options.json {
+            try printJSON(Envelope(action: action, payload: report))
+        } else {
+            print("\(action): \(report.result) [fidelity: \(report.fidelity)]")
+            for change in report.changes { print("  + \(change.detail)") }
+        }
+    }
+}
+
+struct SetPlist: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "plist",
+        abstract: "Set a top-level key in a target's Info.plist (routes to INFOPLIST_KEY_* when GENERATE_INFOPLIST_FILE=YES)."
+    )
+
+    @OptionGroup var options: GlobalOptions
+
+    @Argument(help: "Info.plist key, e.g. CFBundleDisplayName.")
+    var key: String
+
+    @Argument(help: "Value. 'true'/'false' become booleans, integers/decimals become numbers, else a string.")
+    var value: String
+
+    @Option(name: .long, help: "Target name.")
+    var target: String
+
+    func run() throws {
+        try runPlistMutation(action: "set-plist", options: options) { project in
+            try project.setInfoPlistValue(key, to: .parse(value), target: target)
+        }
+    }
+}
+
+struct SetEntitlement: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "entitlement",
+        abstract: "Set a top-level key in a target's .entitlements file."
+    )
+
+    @OptionGroup var options: GlobalOptions
+
+    @Argument(help: "Entitlement key, e.g. com.apple.security.app-sandbox.")
+    var key: String
+
+    @Argument(help: "Value. 'true'/'false' become booleans, integers/decimals become numbers, else a string.")
+    var value: String
+
+    @Option(name: .long, help: "Target name.")
+    var target: String
+
+    func run() throws {
+        try runPlistMutation(action: "set-entitlement", options: options) { project in
+            try project.setEntitlement(key, to: .parse(value), target: target)
         }
     }
 }
