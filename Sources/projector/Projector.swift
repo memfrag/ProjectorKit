@@ -19,6 +19,8 @@ struct Projector: ParsableCommand {
             ValidateCommand.self,
             SetCommand.self,
             DiffCommand.self,
+            AddCommand.self,
+            RemoveCommand.self,
         ]
     )
 }

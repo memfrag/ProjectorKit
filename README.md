@@ -16,22 +16,32 @@ serialization style changes are deliberate, golden-re-baselined upgrades).
 Early development. Milestones:
 
 - [x] M0 — scaffold, project loading, `list targets`
-- [ ] M1 — inspect commands (`list`, `show`, `get`) + `validate`
-- [ ] M2 — fidelity harness (surgical writer, goldens, `--check`)
-- [ ] M3 — file & group operations (classic groups and Xcode 16+ synchronized folders)
+- [x] M1 — inspect commands (`list`, `show`, `get`) + `validate`
+- [x] M2 — fidelity harness (surgical writer, goldens, `--check`)
+- [x] M3 — file & group operations (classic groups and Xcode 16+ synchronized folders)
 - [ ] M4 — targets, dependencies, Swift packages
-- [ ] M5 — build settings & xcconfig
+- [ ] M5 — build settings & xcconfig (scoped set/unset done; xcconfig editing pending)
 - [ ] M6 — schemes, Info.plist, entitlements
 - [ ] M7 — batch `apply`, xcodebuild verification, agent docs
 
 ## Usage
 
 ```sh
+# Inspect
 projector list targets --project MyApp.xcodeproj --json
+projector show target MyApp
+projector get build-setting SWIFT_VERSION --target MyApp --resolved
+projector validate
+
+# Mutate (idempotent; --check previews without writing)
+projector set build-setting SWIFT_VERSION 6.0 --target MyApp --check
+projector add file Sources/Helper.swift --target MyApp --group Support
+projector remove file Sources/Old.swift --delete
 ```
 
 `--project` may be omitted when exactly one `.xcodeproj` exists in the current
-directory.
+directory. Mutating commands take `--check` (dry-run, exit 2 if changes pend),
+`--diff` (show the unified diff), and `--no-backup`.
 
 ## Development
 
