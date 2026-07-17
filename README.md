@@ -19,7 +19,7 @@ Early development. Milestones:
 - [x] M1 — inspect commands (`list`, `show`, `get`) + `validate`
 - [x] M2 — fidelity harness (surgical writer, goldens, `--check`)
 - [x] M3 — file & group operations (classic groups and Xcode 16+ synchronized folders)
-- [ ] M4 — targets, dependencies, Swift packages
+- [x] M4 — targets, dependencies, Swift packages
 - [ ] M5 — build settings & xcconfig (scoped set/unset done; xcconfig editing pending)
 - [ ] M6 — schemes, Info.plist, entitlements
 - [ ] M7 — batch `apply`, xcodebuild verification, agent docs
@@ -37,6 +37,10 @@ projector validate
 projector set build-setting SWIFT_VERSION 6.0 --target MyApp --check
 projector add file Sources/Helper.swift --target MyApp --group Support
 projector remove file Sources/Old.swift --delete
+projector add target Tool --type commandLineTool --platform macOS
+projector add dependency --target MyApp --on Tool
+projector add package https://github.com/apple/swift-log.git --product Logging --target MyApp
+projector add package ../LocalPkg --local --product LocalLib --target MyApp
 ```
 
 `--project` may be omitted when exactly one `.xcodeproj` exists in the current
