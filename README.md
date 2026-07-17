@@ -20,7 +20,7 @@ Early development. Milestones:
 - [x] M2 — fidelity harness (surgical writer, goldens, `--check`)
 - [x] M3 — file & group operations (classic groups and Xcode 16+ synchronized folders)
 - [x] M4 — targets, dependencies, Swift packages
-- [ ] M5 — build settings & xcconfig (scoped set/unset done; xcconfig editing pending)
+- [x] M5 — build settings & xcconfig
 - [ ] M6 — schemes, Info.plist, entitlements
 - [ ] M7 — batch `apply`, xcodebuild verification, agent docs
 
@@ -41,7 +41,15 @@ projector add target Tool --type commandLineTool --platform macOS
 projector add dependency --target MyApp --on Tool
 projector add package https://github.com/apple/swift-log.git --product Logging --target MyApp
 projector add package ../LocalPkg --local --product LocalLib --target MyApp
+projector set xcconfig-value --file Shared.xcconfig SWIFT_STRICT_CONCURRENCY complete
+projector set xcconfig Shared.xcconfig --target MyApp --configuration Debug
 ```
+
+`set xcconfig-value` edits an `.xcconfig` file's own text directly, preserving
+every other line's comments and formatting exactly — it never routes through
+XcodeProj's xcconfig writer, which would drop comments. `set xcconfig` attaches
+an existing `.xcconfig` file as a configuration's base configuration in the
+pbxproj (surgically, like every other mutation here).
 
 `--project` may be omitted when exactly one `.xcodeproj` exists in the current
 directory. Mutating commands take `--check` (dry-run, exit 2 if changes pend),
